@@ -307,7 +307,7 @@ calculateSchedule ()
 									  150));
 	t++;
 	al_flip_display ();
-	al_rest (1.5);
+	al_rest (2.5);
 
     }
 
