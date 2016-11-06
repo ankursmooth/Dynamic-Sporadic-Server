@@ -16,9 +16,10 @@ const int BOUNCER_SIZE = 32;
 ALLEGRO_DISPLAY *display;
 ALLEGRO_FONT *font;
 int no_periodic, no_aperiodic;
-int Ts, Cs, RA, RT, ds;
+int Ts, Cs, RA, RT, ds;   // Ts=server time period; Cs=server's capcity; 
+                          //RA=Replenishment Amount; RT=Replenishment time; ds=server deadline;
 float U;
-map < int, int >positionLines;
+map < int, int >positionLines; 
 int maxTime;
 struct aperiodic
 {
@@ -32,20 +33,21 @@ struct periodic
     int timeperiod;
 };
 
-struct jobsforQ
+struct jobsforQ    
 {
     int remainingC;
     int deadline;
     char type;
     int no;
 };
-struct replenishment
+struct replenishment   
 {
     int amount;
     int RT;
 
 };
 
+// Function to decide priority according to deadline
 class CompareJobsQ
 {
   public:
@@ -58,12 +60,13 @@ class CompareJobsQ
     }
 };
 priority_queue < struct jobsforQ, vector < struct jobsforQ >,
-    CompareJobsQ > readyQ;
-queue < struct replenishment >replenishmentQ;
+    CompareJobsQ > readyQ;    // queue for implementing EDF 
+queue < struct replenishment >replenishmentQ;  // stores calculated replenishment time 
 
 struct periodic *periodicTasks;
 struct aperiodic *aperiodicJobs;
 
+// Function to compare aperiodic task
 static int
 arrival_cmp (const void *a, const void *b)
 {
@@ -73,6 +76,7 @@ arrival_cmp (const void *a, const void *b)
     return da->arrival < db->arrival ? -1 : da->arrival > db->arrival;
 }
 
+// function to compare periodic tasks according to their time period.
 static int
 timeperiod_cmp (const void *a, const void *b)
 {
@@ -101,7 +105,7 @@ main (int argc, char **argv)
     }
     schedubilityTest ();
     cout << "U = " << U << endl;
-    calculateSchedule ();
+    calculateSchedule ();    
     al_destroy_display (display);
 
 }
@@ -117,18 +121,19 @@ calculateSchedule ()
     cin >> c;
 
     qsort (periodicTasks, sizeof periodicTasks / sizeof *periodicTasks,
-	   sizeof *periodicTasks, timeperiod_cmp);
+	   sizeof *periodicTasks, timeperiod_cmp); // periodic tasks sorted on basis of timeperiod
     qsort (aperiodicJobs, sizeof aperiodicJobs / sizeof *aperiodicJobs,
-	   sizeof *aperiodicJobs, arrival_cmp);
-    int maxTimePeriod = periodicTasks[no_periodic - 1].timeperiod;
-
+	   sizeof *aperiodicJobs, arrival_cmp);  // aperiodic tasks sorted on basis of arrivaltime
+    int maxTimePeriod = periodicTasks[no_periodic - 1].timeperiod; //max timeperiod among periodic tasks 
+    
+   // max time needed to show scheduibility of system
     maxTime =
 	MAX (maxTimePeriod,
 	     aperiodicJobs[no_aperiodic - 1].arrival + Ts +
 	     aperiodicJobs[no_aperiodic - 1].C);
 
-    maxTime++;
-    drawBasic ();
+    maxTime++;  
+    drawBasic ();n
 
     int i;
 
@@ -143,77 +148,83 @@ calculateSchedule ()
     }
     int aperiodic_counter = 0;
     int t = 0;
-
+    
+    // calculate and draw task to be serve at interval of 1 unit time.
     while (t < maxTime) {
 
 	al_rest (0.1);
-	if (!replenishmentQ.empty ()) {
+	if (!replenishmentQ.empty ()) {         /
 	    struct replenishment tmp =
 		(struct replenishment) replenishmentQ.front ();
-	    if (t == tmp.RT) {
+	        
+		// at replenishment time replenish the server capcity at its full value.
+		if (t == tmp.RT) {                     
 		Cs += tmp.amount;
-		replenishmentQ.pop ();
-		if (aperiodicJobs[aperiodic_counter].arrival < t
-		    && aperiodicJobs[aperiodic_counter].C > 0) {
+		replenishmentQ.pop (); 
+		
+		// aperiodic request pending set server deadline to t + Ts and server capcity >0 and sets replenishment vector..
+		if (aperiodicJobs[aperiodic_counter].arrival < 
+		    && aperiodicJobs[aperiodic_counter].C > 0) { 
 		    struct jobsforQ newjob;
 
-		    newjob.deadline = t + Ts;
-		    newjob.remainingC =
-			min (aperiodicJobs[aperiodic_counter].C, Cs);
+		    newjob.deadline = t + Ts; // set deadline to that job
+		    newjob.remainingC =    
+			min (aperiodicJobs[aperiodic_counter].C, Cs); // computation time for that job.
 		    aperiodicJobs[aperiodic_counter].C -= newjob.remainingC;
-		    newjob.type = 'a';
-		    newjob.no = aperiodic_counter + 1;
-		    readyQ.push (newjob);
+		    newjob.type = 'a';    //aperiodic type task
+		    newjob.no = aperiodic_counter + 1; 
+		    readyQ.push (newjob); // pushing aperioidic job in ready Queue
 		    struct replenishment tmp;
 
-		    tmp.amount = newjob.remainingC;
-		    tmp.RT = t + Ts;
-		    replenishmentQ.push (tmp);
+		    tmp.amount = newjob.remainingC;  // set replenishment amount
+		    tmp.RT = t + Ts; // next replenishment time
+		    replenishmentQ.push (tmp); // push into replenishment queue
 		    if (aperiodicJobs[aperiodic_counter].C == 0) {
 			aperiodic_counter++;
 		    }
 		}
 	    }
 	}
-
-//        serverbudget[t]= Cs;
-	//draw budget
+    
+	// For each periodic task arrives at time t set deadline to next time period and put the job in ready queue. 
 	for (i = 0; i < no_periodic; i++) {
-	    if (t % periodicTasks[i].timeperiod == 0) {
+	    if (t % periodicTasks[i].timeperiod == 0) {  
 
 		struct jobsforQ newjob;
 
-		newjob.deadline = t + periodicTasks[i].timeperiod;
-		newjob.remainingC = periodicTasks[i].C;
-		newjob.type = 'p';
-		newjob.no = i + 1;
-		readyQ.push (newjob);
+		newjob.deadline = t + periodicTasks[i].timeperiod; // set deadline to next time period
+		newjob.remainingC = periodicTasks[i].C;     // computational time required
+		newjob.type = 'p';               // type periodic 
+		newjob.no = i + 1;              // task no.
+		readyQ.push (newjob);           // put task in ready queue
 		al_draw_line (75 + t * 22, positionLines[i + 2], 75 + t * 22,
 			      positionLines[i + 2] - 25, al_map_rgb (i * 70,
 								     i * 40,
 								     i * 10),
-			      1);
+			      1);   // draw arrival and deadline of periodic task 
 	    }
 
 
 	}
-
-	if (aperiodicJobs[aperiodic_counter].arrival == t) {
+        
+	// if an aperiodic request enters at time t set that jobs deadline and replenishment vector.
+	if (aperiodicJobs[aperiodic_counter].arrival == t) {   
 
 	    struct jobsforQ newjob;
 
-	    newjob.deadline = t + Ts;
-	    newjob.remainingC = min (aperiodicJobs[aperiodic_counter].C, Cs);
-	    aperiodicJobs[aperiodic_counter].C -= newjob.remainingC;
-	    newjob.type = 'a';
-	    newjob.no = aperiodic_counter + 1;
-	    readyQ.push (newjob);
+	    newjob.deadline = t + Ts;       // set server deadline 
+	    newjob.remainingC = min (aperiodicJobs[aperiodic_counter].C, Cs); // max computaion serviced by server
+	    aperiodicJobs[aperiodic_counter].C -= newjob.remainingC;    
+	    newjob.type = 'a';                 // aperiodic type task 
+	    newjob.no = aperiodic_counter + 1  // aperiodic task no 
+	    readyQ.push (newjob);   // ready to be served 
 	    struct replenishment tmp;
-
-	    tmp.amount = newjob.remainingC;
-	    tmp.RT = t + Ts;
+            
+	    // setting replenishment vector and adding it to replenishment queue.
+	    tmp.amount = newjob.remainingC;   
+	    tmp.RT = t + Ts;    
 	    replenishmentQ.push (tmp);
-	    if (aperiodicJobs[aperiodic_counter].C == 0) {
+	    if (aperiodicJobs[aperiodic_counter].C == 0) { 
 		aperiodic_counter++;
 	    }
 	    al_draw_line (75 + t * 22, positionLines[1], 75 + t * 22,
@@ -222,33 +233,41 @@ calculateSchedule ()
 	}
 
 
-
-	if (!readyQ.empty ()) {
-	    struct jobsforQ tmp = (struct jobsforQ) (readyQ.top ());
-
-	    if (tmp.deadline < t) {
+        // serves periodic and aperiodic requests waiting for service
+	if (!readyQ.empty ()) {    
+	    struct jobsforQ tmp = (struct jobsforQ) (readyQ.top ());  //pops job with min deadline.
+            
+	    // if job misses it deadline system will halt
+	    if (tmp.deadline < t) { 
             cout << "DEADLINE MISSED";
             al_draw_text (font, al_map_rgb (0, 0, 0), 75+t*22,
 		       (tmp.type=='a'?positionLines[1]:positionLines[tmp.no+1])-27, 0, "D miss");
 		       t = maxTime +1;
 
 	    }
-	    else{
-            queue < struct jobsforQ >tmpQ;
-
-            while (Cs == 0 && tmp.type == 'a') {
-
-            tmpQ.push (tmp);
+            // Schedule tasks according to EDF
+	    else
+	    {
+            queue < struct jobsforQ >tmpQ; //queue for pending aperiodic requets
+            
+            // if server buget is 0 and aperiodic reuqests are there put it in aperiodic queue
+            while (Cs == 0 && tmp.type == 'a') 
+	    {   
+             tmpQ.push (tmp);
             readyQ.pop ();
-            if (!readyQ.empty ()) {
+             if (!readyQ.empty ()) {
                 tmp = (struct jobsforQ) (readyQ.top ());
-            }
-            else
+                }
+             else
                 break;
             }
-            if (!((Cs == 0 && tmp.type == 'a'))) {
+            
+            
+            if (!((Cs == 0 && tmp.type == 'a'))) 
+	    {
             cout << "t= " << t << " type " << tmp.type << " number = " <<
                 tmp.no << " Cs =" << Cs << endl;
+            // drawing server budget graphics
             if (tmp.type == 'a')
                 al_draw_filled_rectangle (75 + t * 22, positionLines[1],
                               75 + (t + 1) * 22,
@@ -265,15 +284,18 @@ calculateSchedule ()
                                   (200 * tmp.no) %
                                   255));
             }
-
-            if (tmp.type == 'p') {
+            // if periodic task serve the request for 1 unit and put it in ready queue if computational time required is still > 0
+            if (tmp.type == 'p') 
+	    {
             tmp.remainingC--;
             readyQ.pop ();
-
             if (tmp.remainingC > 0 && tmp.deadline >= t)
                 readyQ.push (tmp);
             }
+            
+	    // if aperiodic request two cases Cs> 0 or Cs =0
             else {
+            // if budget available sever the request and put it in ready queue if computational time required is still > 0
             if (Cs > 0) {
 
                 Cs--;
@@ -292,8 +314,8 @@ calculateSchedule ()
             }
 
             }
-
-            while (!tmpQ.empty ()) {
+            // if Cs=0 we have aperiodic requests put them back on ready queue 
+            while (!tmpQ.empty ()) {   
             readyQ.push (tmpQ.front ());
             tmpQ.pop ();
             }
@@ -327,8 +349,8 @@ void drawBasic ()
 	fprintf (stderr, "failed to initialize allegro!\n");
     }
     al_init_primitives_addon ();
-    display = al_create_display (SCREEN_W, SCREEN_H);
-    al_clear_to_color (al_map_rgb (255, 255, 255));
+    display = al_create_display (SCREEN_W, SCREEN_H); // creates a window 
+    al_clear_to_color (al_map_rgb (255, 255, 255)); // add color to the window
     if (!display) {
 	//return -1;
 	fprintf (stderr, "failed to create display!\n");
@@ -400,14 +422,15 @@ int schedubilityTest ()
 {
     printf ("testing schedubility\n");
     U =0;
+    //utilization due to periodic tasks
     for(int i=0;i<no_periodic;i++){
         U = U + (float)periodicTasks[i].C/(float)periodicTasks[i].timeperiod;
     }
-    U = U + (float) Cs / (float) Ts;
+    U = U + (float) Cs / (float) Ts;  //total utilization= sevrer utilization + periodic set utilization
 
-    if (U > 1)
+    if (U > 1)     // not schedulable
 	return 0;
-    else
+    else           // schedulable
 	return 1;
 
 }
